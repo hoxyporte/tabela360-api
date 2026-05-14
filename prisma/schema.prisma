@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  BUSINESS
+  ADMIN
+}
+
+model User {
+  id        String     @id @default(uuid())
+  email     String     @unique
+  password  String?
+  name      String?
+  phone     String?
+  role      Role       @default(USER)
+  googleId  String?    @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  leads     Lead[]     @relation("UserLeads")
+  business  Business?
+}
+
+model Business {
+  id            String        @id @default(uuid())
+  user          User          @relation(fields: [userId], references: [id])
+  userId        String        @unique
+  name          String
+  slug          String        @unique
+  logo          String?
+  phone         String?
+  address       String?
+  districtId    Int
+  verified      Boolean       @default(false)
+  premium       Boolean       @default(false)
+  ratingAvg     Float         @default(0.0)
+  responseRate  Float         @default(100.0)
+  district      District      @relation(fields: [districtId], references: [id])
+  offers        Offer[]
+  leadMatches   LeadMatch[]   @relation("BusinessMatches")
+  categoryLinks BusinessCategory[]
+  credits       Credit?
+  payments      Payment[]
+}
+
+model Category {
+  id            Int                @id @default(autoincrement())
+  name          String             @unique
+  slug          String             @unique
+  businessLinks BusinessCategory[]
+  leads         Lead[]
+}
+
+model City {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  slug      String     @unique
+  districts District[]
+}
+
+model District {
+  id        Int        @id @default(autoincrement())
+  name      String
+  slug      String
+  cityId    Int
+  city      City       @relation(fields: [cityId], references: [id])
+  businesses Business[]
+  leads      Lead[]
+
+  @@unique([slug, cityId])
+}
+
+model BusinessCategory {
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryId Int
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  @@id([businessId, categoryId])
+}
+
+model Lead {
+  id          String      @id @default(uuid())
+  userId      String
+  categoryId  Int
+  districtId  Int
+  cityId      Int
+  budget      String?
+  description String?
+  status      LeadStatus  @default(PENDING)
+  createdAt   DateTime    @default(now())
+  user        User        @relation("UserLeads", fields: [userId], references: [id])
+  category    Category    @relation(fields: [categoryId], references: [id])
+  district    District    @relation(fields: [districtId], references: [id])
+  matches     LeadMatch[] @relation("LeadMatches")
+  offers      Offer[]
+}
+
+enum LeadStatus {
+  PENDING
+  MATCHED
+  OFFER_RECEIVED
+  COMPLETED
+  CANCELLED
+}
+
+model LeadMatch {
+  leadId     String
+  businessId String
+  score      Float
+  notifiedAt DateTime?
+  createdAt  DateTime @default(now())
+  lead       Lead     @relation("LeadMatches", fields: [leadId], references: [id])
+  business   Business @relation("BusinessMatches", fields: [businessId], references: [id])
+  @@id([leadId, businessId])
+}
+
+model Offer {
+  id         String   @id @default(uuid())
+  leadId     String
+  businessId String
+  price      Decimal  @db.Money
+  message    String?
+  accepted   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  lead       Lead     @relation(fields: [leadId], references: [id])
+  business   Business @relation(fields: [businessId], references: [id])
+}
+
+model Credit {
+  id         String   @id @default(uuid())
+  businessId String   @unique
+  business   Business @relation(fields: [businessId], references: [id])
+  balance    Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  businessId    String
+  business      Business      @relation(fields: [businessId], references: [id])
+  amount        Decimal       @db.Money
+  creditsAdded  Int
+  status        PaymentStatus @default(PENDING)
+  providerRef   String?
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime?
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
